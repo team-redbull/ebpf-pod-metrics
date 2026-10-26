@@ -24,10 +24,11 @@ defaultAddCapabilities: null
 requiredDropCapabilities: null
 runAsUser:
   type: RunAsAny
+# RunAsAny, not MustRunAs/spc_t: the container sets seLinuxOptions.type=spc_t itself, and SCC admission only
+# defaults seLinuxOptions when the container leaves it unset, so MustRunAs rejects the pod for the empty
+# MCS level (".seLinuxOptions.level: Invalid value: \"\": must be s0:cX,cY"). Only this chart's SA can use it.
 seLinuxContext:
-  type: MustRunAs
-  seLinuxOptions:
-    type: spc_t
+  type: RunAsAny
 fsGroup:
   type: RunAsAny
 supplementalGroups:
