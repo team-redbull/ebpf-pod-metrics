@@ -1,0 +1,28 @@
+ebpf-pod-metrics {{ .Chart.Version }} (ebpf_exporter {{ .Chart.AppVersion }}) installed in {{ .Release.Namespace }}.
+
+Programs: {{ include "ebpf-pod-metrics.programs" . }}
+
+Nothing runs until nodes opt in. Canary first:
+
+  oc label node <node> ebpf-exporter.io/enabled=true
+
+Pre-flight the kernel verifier on that node (loads and attaches every program, then exits):
+
+  oc -n {{ .Release.Namespace }} debug ds/{{ include "ebpf-pod-metrics.fullname" . }} -- /ebpf_exporter \
+    --config.dir=/etc/ebpf-pod-metrics --config.names={{ include "ebpf-pod-metrics.programs" . }} \
+    --config.check --config.strict
+
+Kill switch (one node / all):
+
+  oc label node <node> ebpf-exporter.io/enabled-
+  helm -n {{ .Release.Namespace }} uninstall {{ .Release.Name }}
+{{- if not .Values.serviceMonitor.enabled }}
+
+serviceMonitor.enabled=false: point your own Prometheus at port {{ .Values.service.port }} of the
+{{ include "ebpf-pod-metrics.fullname" . }} pods, with job="ebpf-exporter" and a node label.
+{{- end }}
+{{- if not (or .Values.dashboard.configMap.enabled .Values.dashboard.grafanaOperator.enabled) }}
+
+Dashboard: import files/dashboards/ebpf-pod-metrics.json from the chart, or set dashboard.configMap.enabled
+or dashboard.grafanaOperator.enabled. Use thanos-querier as the data source (it needs kube_pod_info too).
+{{- end }}

@@ -1,0 +1,23 @@
+metrics:
+  counters:
+    - name: pod_tcp_retransmits_total
+      help: Per-pod TCP segment retransmissions
+      labels:
+        - name: uid
+          size: 40
+          decoders:
+            - name: string
+    - name: pod_tcp_resets_sent_total
+      help: Per-pod TCP RSTs sent
+      labels:
+        - name: uid
+          size: 40
+          decoders:
+            - name: string
+    - name: pod_tcp_resets_received_total
+      help: Per-pod TCP RSTs received
+      labels:
+        - name: uid
+          size: 40
+          decoders:
+            - name: string

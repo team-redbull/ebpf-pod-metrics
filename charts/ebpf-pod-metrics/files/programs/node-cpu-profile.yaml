@@ -1,0 +1,49 @@
+metrics:
+  counters:
+    - name: node_cpu_samples_total
+      help: On-CPU samples at 49 Hz per CPU by context, service/kernel-thread name and mode (rate / 49 = cores)
+      labels:
+        - name: name
+          size: 40
+          decoders:
+            - name: string
+        - name: context
+          size: 4
+          decoders:
+            - name: uint
+            - name: static_map
+              static_map:
+                0: idle
+                1: pod
+                2: system
+                3: kernel
+        - name: mode
+          size: 4
+          decoders:
+            - name: uint
+            - name: static_map
+              static_map:
+                0: user
+                1: kernel
+    - name: node_kernel_function_samples_total
+      help: Kernel-mode samples at 49 Hz per CPU by kernel function and context (rate / 49 = cores)
+      labels:
+        - name: function
+          size: 8
+          decoders:
+            # one-frame kstack = nearest-symbol lookup (ksym only resolves exact symbol starts
+            # and re-reads /proc/kallsyms on every miss)
+            - name: kstack
+        - name: context
+          size: 4
+          padding: 4
+          decoders:
+            - name: uint
+            - name: static_map
+              static_map:
+                0: idle
+                1: pod
+                2: system
+                3: kernel
+    - name: node_kernel_function_samples_dropped_total
+      help: Kernel-mode samples not attributed to a function because the address map was full

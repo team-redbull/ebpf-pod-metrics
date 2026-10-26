@@ -1,0 +1,43 @@
+{{- with .Values.dashboard.configMap }}
+{{- if .enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ebpf-pod-metrics.fullname" $ }}-dashboard
+  namespace: {{ .namespace | default $.Release.Namespace }}
+  labels:
+    {{- include "ebpf-pod-metrics.labels" $ | nindent 4 }}
+    {{- with .labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  ebpf-pod-metrics.json: |
+{{ $.Files.Get "files/dashboards/ebpf-pod-metrics.json" | indent 4 }}
+{{- end }}
+{{- end }}
+{{- with .Values.dashboard.grafanaOperator }}
+{{- if .enabled }}
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ include "ebpf-pod-metrics.fullname" $ }}
+  namespace: {{ .namespace | default $.Release.Namespace }}
+  labels:
+    {{- include "ebpf-pod-metrics.labels" $ | nindent 4 }}
+spec:
+  instanceSelector:
+    {{- toYaml .instanceSelector | nindent 4 }}
+  allowCrossNamespaceImport: {{ .allowCrossNamespaceImport }}
+  resyncPeriod: {{ .resyncPeriod }}
+  {{- with .folder }}
+  folder: {{ . | quote }}
+  {{- end }}
+  json: |
+{{ $.Files.Get "files/dashboards/ebpf-pod-metrics.json" | indent 4 }}
+{{- end }}
+{{- end }}

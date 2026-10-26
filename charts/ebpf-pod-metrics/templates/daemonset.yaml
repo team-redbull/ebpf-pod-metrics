@@ -1,0 +1,109 @@
+{{- $profile := include "ebpf-pod-metrics.hasProfile" . }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "ebpf-pod-metrics.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ebpf-pod-metrics.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "ebpf-pod-metrics.selectorLabels" . | nindent 6 }}
+  {{- with .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "ebpf-pod-metrics.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        openshift.io/required-scc: {{ include "ebpf-pod-metrics.sccName" . }} # OCP 4.14+: pin the SCC
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "ebpf-pod-metrics.fullname" . }}
+      # No API token: the exporter never talks to the apiserver.
+      automountServiceAccountToken: false
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: ebpf-exporter # fixed: alerts match on it
+          image: {{ include "ebpf-pod-metrics.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --config.dir=/etc/ebpf-pod-metrics
+            - --config.names={{ include "ebpf-pod-metrics.programs" . }}
+            # Drop all capabilities once the probes are attached. With node-cpu-profile, keep SYSLOG:
+            # the kernel-function decoder re-reads /proc/kallsyms (e.g. after a module loads).
+            - --capabilities.keep={{ if $profile }}cap_syslog{{ else }}none{{ end }}
+            - --web.listen-address=:{{ .Values.service.port }}
+            {{- range .Values.extraArgs }}
+            - {{ . }}
+            {{- end }}
+          env:
+            - name: OTEL_TRACES_EXPORTER # tracing isn't used; stops OTLP retry noise
+              value: none
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: metrics
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 0
+            runAsNonRoot: false
+            seLinuxOptions:
+              type: spc_t
+            seccompProfile:
+              type: Unconfined # RuntimeDefault blocks bpf()/perf_event_open()
+            capabilities:
+              drop: ["ALL"]
+              # Deliberately NOT adding DAC_READ_SEARCH: on kernels >= 6.6 it switches ebpf_exporter's
+              # cgroup watcher to fanotify, which log.Fatal()s on non-directory events in cgroupfs.
+              # These programs resolve pods in-kernel and never need it.
+              add: {{ include "ebpf-pod-metrics.capabilities" . }}
+          volumeMounts:
+            - name: programs
+              mountPath: /etc/ebpf-pod-metrics
+              readOnly: true
+      volumes:
+        - name: programs
+          configMap:
+            name: {{ include "ebpf-pod-metrics.programsConfigMap" . }}

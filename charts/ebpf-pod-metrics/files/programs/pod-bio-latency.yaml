@@ -1,0 +1,47 @@
+metrics:
+  histograms:
+    # per pod and op: coarse (<=1ms, <=10ms, catch-all) -> 6 series per pod per op
+    - name: pod_block_io_latency_seconds
+      help: Per-pod block IO latency (request alloc -> complete, like await), coarse buckets
+      bucket_type: fixed
+      bucket_multiplier: 0.000001
+      bucket_keys: [1000, 10000, 4194304]
+      labels:
+        - name: uid
+          size: 40
+          decoders:
+            - name: string
+        - name: operation
+          size: 8
+          decoders:
+            - name: uint
+            - name: static_map
+              static_map:
+                0: read
+                1: write
+        - name: bucket
+          size: 8
+          decoders:
+            - name: uint
+    - name: node_block_io_read_latency_seconds
+      help: Node-wide block read latency (request alloc -> complete), exp2 buckets 1us .. ~4.2s
+      bucket_type: exp2
+      bucket_min: 0
+      bucket_max: 22
+      bucket_multiplier: 0.000001
+      labels:
+        - name: bucket
+          size: 4
+          decoders:
+            - name: uint
+    - name: node_block_io_write_latency_seconds
+      help: Node-wide block write latency (request alloc -> complete), exp2 buckets 1us .. ~4.2s
+      bucket_type: exp2
+      bucket_min: 0
+      bucket_max: 22
+      bucket_multiplier: 0.000001
+      labels:
+        - name: bucket
+          size: 4
+          decoders:
+            - name: uint

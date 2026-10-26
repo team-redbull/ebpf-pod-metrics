@@ -1,0 +1,29 @@
+metrics:
+  histograms:
+    # per pod: coarse (<=1ms, <=10ms, catch-all) -> 6 series per pod
+    - name: pod_runqueue_latency_seconds
+      help: Per-pod CPU run-queue latency (runnable -> running), coarse buckets
+      bucket_type: fixed
+      bucket_multiplier: 0.000001 # microseconds -> seconds
+      bucket_keys: [1000, 10000, 4194304]
+      labels:
+        - name: uid
+          size: 40
+          decoders:
+            - name: string
+        - name: bucket
+          size: 8
+          decoders:
+            - name: uint
+    # per node: full distribution over all tasks (pods, services, kernel threads)
+    - name: node_runqueue_latency_seconds
+      help: Node-wide CPU run-queue latency for all tasks, exp2 buckets 1us .. ~4.2s
+      bucket_type: exp2
+      bucket_min: 0
+      bucket_max: 22
+      bucket_multiplier: 0.000001
+      labels:
+        - name: bucket
+          size: 4
+          decoders:
+            - name: uint

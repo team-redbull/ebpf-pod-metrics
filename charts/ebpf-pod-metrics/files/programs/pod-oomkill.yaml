@@ -1,0 +1,13 @@
+metrics:
+  counters:
+    - name: pod_oom_kills_total
+      help: Per-pod OOM kills by victim process name
+      labels:
+        - name: uid
+          size: 40
+          decoders:
+            - name: string
+        - name: comm
+          size: 16
+          decoders:
+            - name: string

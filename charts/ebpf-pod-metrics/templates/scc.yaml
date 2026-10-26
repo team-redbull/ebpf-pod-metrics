@@ -1,0 +1,44 @@
+{{- if .Values.scc.create }}
+# Least-privilege SCC: no privileged container, no host mounts, no hostPID/hostNetwork. Only the
+# capabilities the enabled programs need, and the spc_t SELinux type (container_t is denied bpf()).
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: {{ include "ebpf-pod-metrics.sccName" . }}
+  labels:
+    {{- include "ebpf-pod-metrics.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/description: >-
+      eBPF tracing for the {{ include "ebpf-pod-metrics.fullname" . }} DaemonSet only:
+      CAP_BPF/CAP_PERFMON + spc_t, no host access.
+allowPrivilegedContainer: false
+allowPrivilegeEscalation: false
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+readOnlyRootFilesystem: false
+allowedCapabilities: {{ include "ebpf-pod-metrics.capabilities" . }}
+defaultAddCapabilities: null
+requiredDropCapabilities: null
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: MustRunAs
+  seLinuxOptions:
+    type: spc_t
+fsGroup:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+seccompProfiles:
+  - "*"
+volumes:
+  - configMap
+  - projected
+  - emptyDir
+users: []
+groups: []
+priority: null
+{{- end }}

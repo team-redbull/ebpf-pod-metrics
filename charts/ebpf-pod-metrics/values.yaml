@@ -1,0 +1,117 @@
+# Resource names. Fixed by default so docs/dashboards can say `ds/ebpf-exporter`; the SCC and
+# ClusterRole are cluster-scoped and get this name too.
+nameOverride: ""
+fullnameOverride: ebpf-exporter
+
+image:
+  # Air-gapped: point at your mirror, e.g. registry.internal:5000
+  #   oc image mirror ghcr.io/cloudflare/ebpf_exporter:v2.5.1 registry.internal:5000/cloudflare/ebpf_exporter:v2.5.1
+  registry: ghcr.io
+  repository: cloudflare/ebpf_exporter
+  tag: v2.5.1
+  digest: "" # sha256:...; takes precedence over tag
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# eBPF programs to load. Each one is independent: disabling one removes its hooks, series and panels' data.
+programs:
+  pod-runqlat:
+    enabled: true # sched_switch: every context switch, ~86 ns. Per-pod CPU waits + node distribution
+  pod-cfs-throttling:
+    enabled: true # unthrottle_cfs_rq: per throttle event. Stall durations
+  pod-tcp:
+    enabled: true # retransmit / RST tracepoints. Needs cgroup v2
+  pod-bio-latency:
+    enabled: true # block_rq_complete: every block IO, ~320 ns. Per-pod + node block IO latency
+  pod-oomkill:
+    enabled: true # oom_kill_process kprobe. OOM kills with victim name
+  node-cpu-profile:
+    enabled: true # 49 Hz sampler per CPU. Non-pod CPU, kernel functions (needs CAP_SYSLOG)
+
+# Opt-in per node: nothing runs until a node carries this label.
+#   oc label node <node> ebpf-exporter.io/enabled=true     enable
+#   oc label node <node> ebpf-exporter.io/enabled-         kill switch (pod exits, programs detach)
+nodeSelector:
+  kubernetes.io/os: linux
+  ebpf-exporter.io/enabled: "true"
+
+tolerations:
+  - operator: Exists # every labeled node, incl. masters/infra/GPU
+
+affinity: {}
+
+# Leave empty: a high-priority DaemonSet pod would preempt (evict) workload pods on a full node.
+priorityClassName: ""
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 10%
+
+podAnnotations: {}
+podLabels: {}
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi # ~60Mi process + ~13Mi + 0.1Mi/CPU of BPF maps (charged to this cgroup)
+  limits:
+    cpu: 500m # bounds the exporter process only; in-kernel BPF cost is charged to the traced tasks
+    memory: 256Mi
+
+# Extra ebpf_exporter flags, e.g. ["--debug"]
+extraArgs: []
+
+service:
+  port: 9435
+
+scc:
+  # Custom SCC: BPF/PERFMON/SYS_RESOURCE (+SYSLOG with node-cpu-profile), spc_t, no host access.
+  create: true
+  # Use an existing SCC instead (scc.create=false). Must allow the same capabilities and spc_t.
+  name: ""
+
+serviceMonitor:
+  enabled: true # needs user-workload monitoring (enableUserWorkload: true)
+  interval: 30s
+  scrapeTimeout: 10s
+  # A node exposing more than this fails its scrape (EbpfExporterDown) instead of flooding the TSDB.
+  # ~7.5k samples at 286 pods/node, ~13k at 500.
+  sampleLimit: 30000
+  # Drop ebpf_exporter_node_kernel_function_samples_total at scrape time: about a third of all series
+  # (~70k on 28 nodes). Loses the "Top kernel functions" and "Kernel CPU by subsystem" panels.
+  dropKernelFunctions: false
+  metricRelabelings: []
+  labels: {}
+
+prometheusRule:
+  enabled: true
+  labels: {}
+  # Pre-aggregates kernel functions into subsystems for the dashboard (~2 s query -> ~2 ms).
+  recordingRules: true
+  alerts:
+    enabled: true
+    # EbpfExporterHighOverhead: in-kernel BPF time per node, in cores. Only evaluates while
+    # sysctl kernel.bpf_stats_enabled=1 (e.g. during a canary).
+    overheadCores: 0.05
+    # EbpfExporterNearMemoryLimit: working set / memory limit
+    memoryLimitRatio: 0.85
+
+dashboard:
+  # ConfigMap for a Grafana dashboard sidecar (kiwigrid k8s-sidecar style).
+  configMap:
+    enabled: false
+    namespace: "" # defaults to the release namespace
+    labels:
+      grafana_dashboard: "1"
+    annotations: {}
+  # GrafanaDashboard CR for grafana-operator v5 (grafana.integreatly.org/v1beta1).
+  grafanaOperator:
+    enabled: false
+    namespace: "" # defaults to the release namespace
+    instanceSelector:
+      matchLabels:
+        dashboards: grafana
+    folder: ""
+    allowCrossNamespaceImport: false
+    resyncPeriod: 10m

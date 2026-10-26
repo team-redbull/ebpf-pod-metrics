@@ -1,0 +1,28 @@
+metrics:
+  histograms:
+    # per pod: coarse (<=10ms, <=80ms of a 100ms CFS period, catch-all) -> 6 series per throttled pod
+    - name: pod_cfs_throttled_seconds
+      help: Per-pod CFS throttle stall per throttled per-CPU run queue, coarse buckets
+      bucket_type: fixed
+      bucket_multiplier: 0.000001
+      bucket_keys: [10000, 80000, 4194304] # thresholds chosen to render as exact le="0.01"/"0.08"
+      labels:
+        - name: uid
+          size: 40
+          decoders:
+            - name: string
+        - name: bucket
+          size: 8
+          decoders:
+            - name: uint
+    - name: node_cfs_throttled_seconds
+      help: Node-wide CFS throttle stall duration, exp2 buckets 1us .. ~4.2s
+      bucket_type: exp2
+      bucket_min: 0
+      bucket_max: 22
+      bucket_multiplier: 0.000001
+      labels:
+        - name: bucket
+          size: 4
+          decoders:
+            - name: uint

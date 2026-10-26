@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "registry": { "type": "string" },
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^(|sha256:[a-f0-9]{64})$" },
+        "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
+      },
+      "required": ["repository"]
+    },
+    "imagePullSecrets": { "type": "array", "items": { "type": "object", "required": ["name"] } },
+    "programs": {
+      "type": "object",
+      "propertyNames": {
+        "enum": ["pod-runqlat", "pod-cfs-throttling", "pod-tcp", "pod-bio-latency", "pod-oomkill", "node-cpu-profile"]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "enabled": { "type": "boolean" } },
+        "required": ["enabled"]
+      }
+    },
+    "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
+    "tolerations": { "type": "array", "items": { "type": "object" } },
+    "affinity": { "type": "object" },
+    "priorityClassName": { "type": "string" },
+    "updateStrategy": { "type": "object" },
+    "podAnnotations": { "type": "object", "additionalProperties": { "type": "string" } },
+    "podLabels": { "type": "object", "additionalProperties": { "type": "string" } },
+    "resources": { "type": "object" },
+    "extraArgs": { "type": "array", "items": { "type": "string", "pattern": "^--" } },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "port": { "type": "integer", "minimum": 1, "maximum": 65535 } }
+    },
+    "scc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "create": { "type": "boolean" }, "name": { "type": "string" } }
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "interval": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+        "scrapeTimeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+        "sampleLimit": { "type": "integer", "minimum": 0 },
+        "dropKernelFunctions": { "type": "boolean" },
+        "metricRelabelings": { "type": "array", "items": { "type": "object" } },
+        "labels": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "prometheusRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+        "recordingRules": { "type": "boolean" },
+        "alerts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "overheadCores": { "type": "number", "exclusiveMinimum": 0 },
+            "memoryLimitRatio": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configMap": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "namespace": { "type": "string" },
+            "labels": { "type": "object", "additionalProperties": { "type": "string" } },
+            "annotations": { "type": "object", "additionalProperties": { "type": "string" } }
+          }
+        },
+        "grafanaOperator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "namespace": { "type": "string" },
+            "instanceSelector": { "type": "object" },
+            "folder": { "type": "string" },
+            "allowCrossNamespaceImport": { "type": "boolean" },
+            "resyncPeriod": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

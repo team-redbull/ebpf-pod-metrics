@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ebpf-pod-metrics.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ebpf-pod-metrics.labels" . | nindent 4 }}
+    # Prometheus job name (ServiceMonitor jobLabel): dashboards and alerts use job="ebpf-exporter"
+    {{ include "ebpf-pod-metrics.jobLabel" . }}: ebpf-exporter
+spec:
+  clusterIP: None
+  selector:
+    {{- include "ebpf-pod-metrics.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: metrics
+      port: {{ .Values.service.port }}
+      targetPort: metrics
+      protocol: TCP

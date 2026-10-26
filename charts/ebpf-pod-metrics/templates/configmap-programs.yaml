@@ -1,0 +1,25 @@
+# Compiled CO-RE objects + their ebpf_exporter configs, for the enabled programs only.
+# Content-addressed name + immutable: kubelets don't keep a watch on it (no apiserver load per node),
+# and any change rolls the DaemonSet.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ebpf-pod-metrics.programsConfigMap" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ebpf-pod-metrics.labels" . | nindent 4 }}
+  annotations:
+    # ~600 KiB object: client-side apply would copy it into kubectl.kubernetes.io/last-applied-configuration
+    # and hit the 256 KiB annotation limit. Server-side apply stores no such annotation. (helm install
+    # doesn't use that annotation either; this is for ArgoCD and `helm template | oc apply`.)
+    argocd.argoproj.io/sync-options: ServerSideApply=true
+immutable: true
+data:
+{{- range $name := splitList "," (include "ebpf-pod-metrics.programs" .) }}
+  {{ $name }}.yaml: |
+{{ $.Files.Get (printf "files/programs/%s.yaml" $name) | indent 4 }}
+{{- end }}
+binaryData:
+{{- range $name := splitList "," (include "ebpf-pod-metrics.programs" .) }}
+  {{ $name }}.bpf.o: {{ $.Files.Get (printf "files/programs/%s.bpf.o" $name) | b64enc }}
+{{- end }}
