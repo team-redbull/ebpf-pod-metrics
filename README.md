@@ -76,18 +76,18 @@ charts/ebpf-pod-metrics/      Helm chart
                               PrometheusRules, optional dashboard ConfigMap / GrafanaDashboard
 bpf/                          C sources + Makefile (builds into files/programs/)
 tools/gen_dashboard.py        regenerates the dashboard and the recording rule
+tools/airgap-bundle.sh        builds an offline bundle (image + chart + source) on a connected host
+tools/airgap-load.sh          pushes the bundle into an internal registry on the disconnected side
 docs/                         design & operations guide (+ architecture.svg)
 ```
 
 ## Deploy
 
 Prerequisites: user-workload monitoring enabled (`enableUserWorkload: true` in `cluster-monitoring-config`), the
-image mirrored for air-gapped clusters, and a namespace that allows the privileged PSA level (the chart doesn't
+image in a registry the cluster can pull from (see Air-gapped below), and a namespace that allows the privileged PSA level (the chart doesn't
 create it — Helm stores its release in that namespace, so it must exist first).
 
 ```bash
-oc image mirror ghcr.io/cloudflare/ebpf_exporter:v2.5.1 registry.internal:5000/cloudflare/ebpf_exporter:v2.5.1
-
 oc create namespace ebpf-exporter
 oc label namespace ebpf-exporter pod-security.kubernetes.io/enforce=privileged \
   pod-security.kubernetes.io/audit=privileged pod-security.kubernetes.io/warn=privileged \
@@ -96,6 +96,26 @@ oc label namespace ebpf-exporter pod-security.kubernetes.io/enforce=privileged \
 helm install ebpf-exporter charts/ebpf-pod-metrics -n ebpf-exporter \
   --set image.registry=registry.internal:5000
 ```
+
+### Air-gapped (no oc mirror)
+
+The only thing pulled from the internet is the exporter image; the BPF objects, configs and dashboard ship inside
+the chart. Two scripts carry everything across with skopeo, podman or docker (first found, or `TOOL=...`):
+
+```bash
+# connected host: image (docker-archive, PLATFORM=linux/amd64), helm package, git archive, SHA256SUMS
+tools/airgap-bundle.sh                         # -> dist/ebpf-pod-metrics-airgap-0.1.0.tar (~55 MB)
+
+# disconnected host, after copying the tar across and logging in to the registry
+tar xf ebpf-pod-metrics-airgap-0.1.0.tar && cd ebpf-pod-metrics-airgap-0.1.0
+./airgap-load.sh registry.internal:5000 [oci://registry.internal:5000/charts]   # TLS_VERIFY=false if self-signed
+helm install ebpf-exporter charts/ebpf-pod-metrics-0.1.0.tgz -n ebpf-exporter -f values-airgap.yaml
+```
+
+`airgap-load.sh` verifies the checksums, pushes the image (keeping its upstream path under the registry, which may
+carry a prefix like `registry.internal:5000/mirror`), optionally `helm push`es the chart, and writes
+`values-airgap.yaml` pinning the image by the digest the internal registry reports. For ArgoCD, seed the internal
+git server from `src/ebpf-pod-metrics-0.1.0.tar.gz` and put the same `image` values in `valuesObject`.
 
 Nothing runs yet: label nodes `ebpf-exporter.io/enabled=true` to opt them in (see the rollout runbook below; the
 install NOTES print the pre-flight and kill-switch commands). Upgrades: `helm upgrade ebpf-exporter
@@ -145,8 +165,8 @@ spec:
   `kubectl.kubernetes.io/last-applied-configuration` annotation and fail on the 256 KiB annotation limit, so it
   carries `argocd.argoproj.io/sync-options: ServerSideApply=true`. If you render and apply by hand, use
   `helm template … | oc apply --server-side -f -`.
-- Air-gapped chart distribution: the git path above, or `helm package charts/ebpf-pod-metrics` and
-  `helm push ebpf-pod-metrics-0.1.0.tgz oci://registry.internal/charts`.
+- Air-gapped chart distribution: the git path above (seeded from the bundle's `src/`), or the bundle's chart
+  pushed to an OCI registry by `airgap-load.sh`.
 
 ### Main values
 

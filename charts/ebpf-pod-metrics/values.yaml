@@ -4,8 +4,8 @@ nameOverride: ""
 fullnameOverride: ebpf-exporter
 
 image:
-  # Air-gapped: point at your mirror, e.g. registry.internal:5000
-  #   oc image mirror ghcr.io/cloudflare/ebpf_exporter:v2.5.1 registry.internal:5000/cloudflare/ebpf_exporter:v2.5.1
+  # Air-gapped: point at your internal registry, e.g. registry.internal:5000. tools/airgap-bundle.sh +
+  # airgap-load.sh carry the image across (skopeo/podman/docker, no oc mirror) and write these values.
   registry: ghcr.io
   repository: cloudflare/ebpf_exporter
   tag: v2.5.1
