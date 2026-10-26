@@ -9,7 +9,7 @@ image:
   # (skopeo/podman/docker, no oc mirror) and write these values.
   registry: ""
   repository: ghcr.io/team-redbull/ebpf-pod-metrics
-  tag: v1.0.0
+  tag: fix-scc-selinux-runasany-c5eb837
   digest: "" # sha256:...; takes precedence over tag
   pullPolicy: IfNotPresent
 imagePullSecrets: []
