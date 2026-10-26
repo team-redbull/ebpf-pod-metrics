@@ -147,7 +147,7 @@ The chart targets OpenShift 4.14 or later (`kubeVersion >=1.27`) and is built an
 | cgroup mode | v2 for all metrics; v1 works except TCP. New 4.14+ installs default to v2; clusters upgraded from 4.13 or earlier usually stay on v1 | `oc debug node/<node> -- chroot /host stat -fc %T /sys/fs/cgroup` (`cgroup2fs` = v2, `tmpfs` = v1) |
 | cgroup driver | systemd (OpenShift default) | pod slices named `kubepods-*-pod<uid>.slice` |
 | User-workload monitoring | `enableUserWorkload: true` in `cluster-monitoring-config` | `oc -n openshift-user-workload-monitoring get pods` |
-| Image | `ghcr.io/cloudflare/ebpf_exporter:v2.5.1`, loaded into an internal registry for air-gapped clusters (see Air-gapped installation) | `skopeo inspect docker://<registry>/cloudflare/ebpf_exporter:v2.5.1` |
+| Image | `ghcr.io/team-redbull/ebpf-pod-metrics:vX.Y.Z`, built by CI (see Supply chain); loaded into an internal registry for air-gapped clusters (see Air-gapped installation) | `skopeo inspect docker://<registry>/team-redbull/ebpf-pod-metrics:vX.Y.Z` |
 | Helm | v3 (rendering tested with v3.16.4); ArgoCD with OpenShift GitOps also works | `helm version` |
 | Namespace | Exists before install, privileged PSA labels | see Installation |
 | RBAC for the installer | Create a cluster-scoped SCC and ClusterRole (or reuse an existing SCC) | `oc auth can-i create securitycontextconstraints` |
@@ -228,7 +228,7 @@ spec:
 
 The exporter image is the only artifact fetched from the internet; the BPF objects, exporter configs and dashboard are inside the chart. Instead of `oc mirror` / `oc image mirror`, two scripts move everything as one file using skopeo, podman or docker, whichever is installed (force one with `TOOL=skopeo|podman|docker`).
 
-On a connected host (needs helm and one of the image tools):
+On a connected host (needs helm and one of the image tools, logged in to `ghcr.io` with a token that has `read:packages`, since the CI image is private):
 
 ```bash
 tools/airgap-bundle.sh            # writes dist/ebpf-pod-metrics-airgap-0.1.0.tar (~55 MB)
@@ -236,7 +236,7 @@ tools/airgap-bundle.sh            # writes dist/ebpf-pod-metrics-airgap-0.1.0.ta
 
 | Bundle file | Contents |
 | --- | --- |
-| `images/ebpf_exporter-v2.5.1.tar` | The image as a docker-archive, one platform (`PLATFORM=linux/amd64` by default; `linux/arm64` for Arm nodes) |
+| `images/ebpf-pod-metrics-vX.Y.Z.tar` | The image as a docker-archive, one platform (`PLATFORM=linux/amd64` by default; `linux/arm64` for Arm nodes) |
 | `images.txt` | Source reference, archive, platform and upstream digest |
 | `charts/ebpf-pod-metrics-0.1.0.tgz` | `helm package` of the chart |
 | `src/ebpf-pod-metrics-0.1.0.tar.gz` | `git archive` of HEAD, to seed an internal git server for ArgoCD |
@@ -254,7 +254,7 @@ tar xf ebpf-pod-metrics-airgap-0.1.0.tar && cd ebpf-pod-metrics-airgap-0.1.0
 The loader:
 
 1. Verifies `SHA256SUMS` and stops on any mismatch.
-2. Pushes the image to `<registry>/cloudflare/ebpf_exporter:v2.5.1`. The registry argument may carry a path prefix, e.g. `registry.internal:5000/mirror`.
+2. Pushes the image to `<registry>/team-redbull/ebpf-pod-metrics:vX.Y.Z` (its upstream path under your registry). The registry argument may carry a path prefix, e.g. `registry.internal:5000/mirror`.
 3. Optionally runs `helm push` for the chart.
 4. Writes `values-airgap.yaml` with `image.registry`, `image.repository` and the `image.digest` the internal registry reports. The digest is read back after the push, because a re-push can change the manifest format and therefore the digest.
 
@@ -286,9 +286,9 @@ Every value with its default. `values.schema.json` rejects unknown keys, unknown
 | --- | --- | --- |
 | `fullnameOverride` | `ebpf-exporter` | Name of every resource, including the cluster-scoped SCC and ClusterRole. Empty = `<release>-ebpf-pod-metrics` |
 | `nameOverride` | `""` | Overrides the chart name in labels |
-| `image.registry` | `ghcr.io` | Set to the internal mirror |
-| `image.repository` | `cloudflare/ebpf_exporter` |  |
-| `image.tag` | `v2.5.1` |  |
+| `image.registry` | `""` | Replaces the registry in `image.repository`; set to the internal mirror |
+| `image.repository` | `ghcr.io/team-redbull/ebpf-pod-metrics` | Rewritten by CI on main |
+| `image.tag` | `vX.Y.Z` | Rewritten by CI on main |
 | `image.digest` | `""` | `sha256:…`; takes precedence over the tag |
 | `image.pullPolicy` | `IfNotPresent` |  |
 | `imagePullSecrets` | `[]` |  |
@@ -498,7 +498,7 @@ ebpf\_exporter switches its cgroup watcher to fanotify when it holds `CAP_DAC_RE
 
 ### Supply chain
 
-- The image is the upstream `ghcr.io/cloudflare/ebpf_exporter:v2.5.1`, unmodified; pin it by `image.digest` in production (`airgap-load.sh` does). The bundle records the upstream digest in `images.txt` and checksums every file.
+- The image is built by CI from `Dockerfile`: the upstream `ghcr.io/cloudflare/ebpf_exporter:v2.5.1`, pinned by digest, with the BPF objects and configs from `files/programs/` added at `/etc/ebpf-pod-metrics`. Nothing else is changed. It is pushed to `ghcr.io/team-redbull/ebpf-pod-metrics`; pin it by `image.digest` in production (`airgap-load.sh` does). The bundle records the upstream digest in `images.txt` and checksums every file.
 - The BPF objects are built from the C sources in `bpf/` against the exporter's `vmlinux.h` and libbpf v1.5.0 headers. Builds are reproducible: three clean builds into the same path are byte-identical.
 
 ## Alerts and recording rules
@@ -546,7 +546,7 @@ tools/airgap-load.sh          loads it into an internal registry on the disconne
 | Change a value (mirror, limits, thresholds) | `helm upgrade ebpf-exporter charts/ebpf-pod-metrics -n ebpf-exporter --reuse-values --set …`, or edit `valuesObject` in the ArgoCD Application |
 | Enable or disable a program | `--set programs.<name>.enabled=false` (or `=true`); capabilities, ConfigMap and DaemonSet follow |
 | Add a node / remove a node | `oc label node <node> ebpf-exporter.io/enabled=true` / `ebpf-exporter.io/enabled-` |
-| Upgrade the exporter image | Set `image.tag` in `values.yaml`, rebuild the bundle (`tools/airgap-bundle.sh`), load it, upgrade with the new `values-airgap.yaml`, re-run the pre-flight on one node first |
+| Upgrade the exporter image | Bump the `FROM` tag and digest in `Dockerfile` and push; CI builds the image and rewrites `image.tag`. Then rebuild the bundle (`tools/airgap-bundle.sh`), load it, upgrade with the new `values-airgap.yaml`, re-run the pre-flight on one node first |
 | Rebuild the BPF programs | See below |
 | Change dashboard panels or subsystem regexes | Edit `tools/gen_dashboard.py`, run `python3 tools/gen_dashboard.py`, upgrade |
 | Ship the dashboard to Grafana | `dashboard.configMap.enabled=true` (sidecar) or `dashboard.grafanaOperator.enabled=true` (grafana-operator v5); otherwise import `files/dashboards/ebpf-pod-metrics.json` |

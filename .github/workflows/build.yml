@@ -1,0 +1,49 @@
+name: Build and Push
+
+# One image: upstream ebpf_exporter + the BPF programs (Dockerfile). The chart is vendored in this repo
+# (charts/ebpf-pod-metrics), not in redbull-platform, so on main the shared workflow bumps image.repository/tag,
+# appVersion and version there and tags this repo vX.Y.Z.
+
+on:
+  push:
+    branches: [ '**' ]
+  delete:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # A chart that doesn't render never becomes an image or a version bump.
+  test:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: helm lint charts/ebpf-pod-metrics
+      - run: helm template t charts/ebpf-pod-metrics > /dev/null
+      - name: Every program off but one still renders
+        run: |
+          helm template t charts/ebpf-pod-metrics \
+            --set programs.pod-runqlat.enabled=false --set programs.pod-cfs-throttling.enabled=false \
+            --set programs.pod-tcp.enabled=false --set programs.pod-bio-latency.enabled=false \
+            --set programs.node-cpu-profile.enabled=false > /dev/null
+      - run: bash -n tools/airgap-bundle.sh && bash -n tools/airgap-load.sh
+
+  build:
+    needs: test
+    if: github.event_name == 'push'
+    uses: team-redbull/.github/.github/workflows/ghcr-build-push.yml@main
+    with:
+      image-name: ebpf-pod-metrics
+      helm-values-path: charts/ebpf-pod-metrics/values.yaml
+    secrets: inherit
+
+  cleanup-on-delete:
+    if: github.event_name == 'delete'
+    uses: team-redbull/.github/.github/workflows/ghcr-cleanup-on-delete.yml@main
+    with:
+      image-name: ebpf-pod-metrics
+    secrets: inherit

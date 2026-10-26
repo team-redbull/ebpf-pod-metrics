@@ -78,8 +78,21 @@ bpf/                          C sources + Makefile (builds into files/programs/)
 tools/gen_dashboard.py        regenerates the dashboard and the recording rule
 tools/airgap-bundle.sh        builds an offline bundle (image + chart + source) on a connected host
 tools/airgap-load.sh          pushes the bundle into an internal registry on the disconnected side
+Dockerfile                    upstream ebpf_exporter + the BPF programs; built by .github/workflows/build.yml
 docs/                         design & operations guide (+ architecture.svg)
 ```
+
+## Image and CI
+
+`.github/workflows/build.yml` calls the org's shared `team-redbull/.github` build workflow. Every push builds the
+`Dockerfile` (upstream `ebpf_exporter` v2.5.1 pinned by digest, plus `files/programs/` baked into
+`/etc/ebpf-pod-metrics`) and pushes `ghcr.io/team-redbull/ebpf-pod-metrics`: `vX.Y.Z` from main, `<branch>-<sha>`
+from other branches. On main it also writes `image.repository`/`tag` into `values.yaml`, sets `appVersion` and
+`version` in `Chart.yaml` to the same number, tags the repo and pushes that commit back, so `git pull` after a
+push. A `helm lint`/`template` job gates the build.
+
+The repo is private, so the GHCR package is too: clusters need a pull secret (or load it with the air-gap
+bundle, which pulls with your `docker`/`skopeo`/`podman` login).
 
 ## Deploy
 
@@ -172,7 +185,8 @@ spec:
 
 | Value | Default | |
 |---|---|---|
-| `image.registry` / `repository` / `tag` / `digest` | `ghcr.io` / `cloudflare/ebpf_exporter` / `v2.5.1` / — | digest wins over tag |
+| `image.repository` / `tag` / `digest` | CI-built `ghcr.io/team-redbull/ebpf-pod-metrics` / `vX.Y.Z` / — | digest wins over tag; CI rewrites repository + tag on main |
+| `image.registry` | `""` | replaces the registry in `repository` (air-gapped mirror) |
 | `programs.<name>.enabled` | all `true` | `pod-runqlat`, `pod-cfs-throttling`, `pod-tcp`, `pod-bio-latency`, `pod-oomkill`, `node-cpu-profile`; capabilities follow (no `SYSLOG` without `node-cpu-profile`) |
 | `nodeSelector` | `ebpf-exporter.io/enabled: "true"` | per-node opt-in |
 | `resources` | 50m / 128Mi request, 500m / 256Mi limit | BPF maps are charged to the memory limit |

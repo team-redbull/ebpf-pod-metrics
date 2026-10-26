@@ -4,10 +4,12 @@ nameOverride: ""
 fullnameOverride: ebpf-exporter
 
 image:
-  # Air-gapped: point at your internal registry, e.g. registry.internal:5000. tools/airgap-bundle.sh +
-  # airgap-load.sh carry the image across (skopeo/podman/docker, no oc mirror) and write these values.
-  registry: ghcr.io
-  repository: cloudflare/ebpf_exporter
+  # CI (.github/workflows/build.yml) builds the Dockerfile on main and rewrites repository + tag here.
+  # registry, when set, replaces the registry in repository. Air-gapped: point it at your internal registry,
+  # e.g. registry.internal:5000; tools/airgap-bundle.sh + airgap-load.sh carry the image across
+  # (skopeo/podman/docker, no oc mirror) and write these values.
+  registry: ""
+  repository: ghcr.io/cloudflare/ebpf_exporter
   tag: v2.5.1
   digest: "" # sha256:...; takes precedence over tag
   pullPolicy: IfNotPresent

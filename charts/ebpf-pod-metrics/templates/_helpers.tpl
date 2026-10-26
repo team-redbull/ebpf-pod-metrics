@@ -82,10 +82,19 @@ enabled object or config gives a new name, which rolls the DaemonSet; the Config
 {{- end }}
 {{- end }}
 
+{{/*
+Image reference. image.repository may carry its registry (CI writes ghcr.io/team-redbull/ebpf-pod-metrics);
+image.registry, when set, replaces that registry (air-gapped: registry.internal:5000/team-redbull/...).
+*/}}
 {{- define "ebpf-pod-metrics.image" -}}
 {{- $repo := .Values.image.repository }}
 {{- if .Values.image.registry }}
-{{- $repo = printf "%s/%s" .Values.image.registry .Values.image.repository }}
+{{- $parts := splitList "/" $repo }}
+{{- $first := first $parts }}
+{{- if and (gt (len $parts) 1) (or (contains "." $first) (contains ":" $first) (eq "localhost" $first)) }}
+{{- $repo = join "/" (rest $parts) }}
+{{- end }}
+{{- $repo = printf "%s/%s" (trimSuffix "/" .Values.image.registry) $repo }}
 {{- end }}
 {{- if .Values.image.digest }}
 {{- printf "%s@%s" $repo .Values.image.digest }}

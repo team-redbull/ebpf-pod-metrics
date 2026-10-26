@@ -3,11 +3,12 @@
 #
 #   tools/airgap-bundle.sh [OUT_DIR]          # default: dist/
 #
-# Uses skopeo, podman or docker (first found; force one with TOOL=...). The bundle holds the exporter image
+# Uses skopeo, podman or docker (first found; force one with TOOL=...), logged in to ghcr.io (the CI image is
+# private: a token with read:packages). The bundle holds the exporter image
 # as a docker-archive, the packaged chart, a source snapshot (for an internal git / ArgoCD) and the loader:
 #
 #   ebpf-pod-metrics-airgap-<chart version>/
-#     images/ebpf_exporter-<tag>.tar     image (single platform, PLATFORM=linux/amd64 by default)
+#     images/<image>-<tag>.tar           image (single platform, PLATFORM=linux/amd64 by default)
 #     images.txt                         <source ref> <archive> <platform> <source digest>
 #     charts/ebpf-pod-metrics-<v>.tgz    helm package
 #     src/ebpf-pod-metrics-<v>.tar.gz    git archive of HEAD (skipped outside a git checkout)
@@ -27,7 +28,9 @@ values_field() { sed -n "/^image:/,/^[^ ]/s/^  $1: *\"\{0,1\}\([^\" #]*\).*/\1/p
 
 VERSION=$(chart_field version)
 TAG=$(values_field tag); TAG=${TAG:-v$(chart_field appVersion)}
-IMAGE=${IMAGE:-$(values_field registry)/$(values_field repository):$TAG}
+REPO=$(values_field repository)
+[[ -n $(values_field registry) ]] && REPO=$(values_field registry)/${REPO#*/}
+IMAGE=${IMAGE:-$REPO:$TAG}
 
 pick_tool() {
   if [[ -n ${TOOL:-} ]]; then echo "$TOOL"; return; fi
@@ -42,7 +45,7 @@ SHA256=(sha256sum); command -v sha256sum >/dev/null || SHA256=(shasum -a 256)
 
 NAME=ebpf-pod-metrics-airgap-$VERSION
 STAGE="$OUT/$NAME"
-ARCHIVE=images/ebpf_exporter-$TAG.tar
+ARCHIVE=images/$(basename "$REPO")-$TAG.tar
 rm -rf "$STAGE"
 mkdir -p "$STAGE/images" "$STAGE/charts"
 
