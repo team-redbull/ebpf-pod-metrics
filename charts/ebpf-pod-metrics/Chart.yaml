@@ -3,8 +3,8 @@ name: ebpf-pod-metrics
 description: >-
   Per-pod and per-node kernel metrics for OpenShift (CPU run-queue latency, CFS throttle stalls, TCP retransmits/RSTs, block IO latency, OOM kills, non-pod CPU attribution) from cloudflare/ebpf_exporter, with a Grafana dashboard.
 type: application
-version: 1.0.0
-appVersion: "fix-scc-selinux-runasany-c5eb837" # image tag; CI sets it on main (the image is cloudflare/ebpf_exporter v2.5.1 + our programs)
+version: 1.0.1
+appVersion: "v1.0.1" # image tag; CI sets it on main (the image is cloudflare/ebpf_exporter v2.5.1 + our programs)
 kubeVersion: ">=1.27.0-0" # OpenShift 4.14+
 keywords: [ebpf, prometheus, openshift, grafana, observability]
 sources:
