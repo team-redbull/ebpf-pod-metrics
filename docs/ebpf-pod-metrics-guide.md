@@ -170,7 +170,7 @@ Install with Helm into an existing, privileged-labeled namespace; nothing runs u
 
 ```bash
 oc create namespace ebpf-exporter
-oc label namespace ebpf-exporter \
+oc label namespace ebpf-exporter --overwrite \
   pod-security.kubernetes.io/enforce=privileged \
   pod-security.kubernetes.io/audit=privileged \
   pod-security.kubernetes.io/warn=privileged \
