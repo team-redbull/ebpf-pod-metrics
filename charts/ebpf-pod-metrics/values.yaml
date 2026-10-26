@@ -2,19 +2,17 @@
 # ClusterRole are cluster-scoped and get this name too.
 nameOverride: ""
 fullnameOverride: ebpf-exporter
-
 image:
   # CI (.github/workflows/build.yml) builds the Dockerfile on main and rewrites repository + tag here.
   # registry, when set, replaces the registry in repository. Air-gapped: point it at your internal registry,
   # e.g. registry.internal:5000; tools/airgap-bundle.sh + airgap-load.sh carry the image across
   # (skopeo/podman/docker, no oc mirror) and write these values.
   registry: ""
-  repository: ghcr.io/cloudflare/ebpf_exporter
-  tag: v2.5.1
+  repository: ghcr.io/team-redbull/ebpf-pod-metrics
+  tag: v1.0.0
   digest: "" # sha256:...; takes precedence over tag
   pullPolicy: IfNotPresent
 imagePullSecrets: []
-
 # eBPF programs to load. Each one is independent: disabling one removes its hooks, series and panels' data.
 programs:
   pod-runqlat:
@@ -29,30 +27,23 @@ programs:
     enabled: true # oom_kill_process kprobe. OOM kills with victim name
   node-cpu-profile:
     enabled: true # 49 Hz sampler per CPU. Non-pod CPU, kernel functions (needs CAP_SYSLOG)
-
 # Opt-in per node: nothing runs until a node carries this label.
 #   oc label node <node> ebpf-exporter.io/enabled=true     enable
 #   oc label node <node> ebpf-exporter.io/enabled-         kill switch (pod exits, programs detach)
 nodeSelector:
   kubernetes.io/os: linux
   ebpf-exporter.io/enabled: "true"
-
 tolerations:
   - operator: Exists # every labeled node, incl. masters/infra/GPU
-
 affinity: {}
-
 # Leave empty: a high-priority DaemonSet pod would preempt (evict) workload pods on a full node.
 priorityClassName: ""
-
 updateStrategy:
   type: RollingUpdate
   rollingUpdate:
     maxUnavailable: 10%
-
 podAnnotations: {}
 podLabels: {}
-
 resources:
   requests:
     cpu: 50m
@@ -60,19 +51,15 @@ resources:
   limits:
     cpu: 500m # bounds the exporter process only; in-kernel BPF cost is charged to the traced tasks
     memory: 256Mi
-
 # Extra ebpf_exporter flags, e.g. ["--debug"]
 extraArgs: []
-
 service:
   port: 9435
-
 scc:
   # Custom SCC: BPF/PERFMON/SYS_RESOURCE (+SYSLOG with node-cpu-profile), spc_t, no host access.
   create: true
   # Use an existing SCC instead (scc.create=false). Must allow the same capabilities and spc_t.
   name: ""
-
 serviceMonitor:
   enabled: true # needs user-workload monitoring (enableUserWorkload: true)
   interval: 30s
@@ -85,7 +72,6 @@ serviceMonitor:
   dropKernelFunctions: false
   metricRelabelings: []
   labels: {}
-
 prometheusRule:
   enabled: true
   labels: {}
@@ -98,7 +84,6 @@ prometheusRule:
     overheadCores: 0.05
     # EbpfExporterNearMemoryLimit: working set / memory limit
     memoryLimitRatio: 0.85
-
 dashboard:
   # ConfigMap for a Grafana dashboard sidecar (kiwigrid k8s-sidecar style).
   configMap:
